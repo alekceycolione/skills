@@ -1,4 +1,5 @@
 import google.generativeai as genai
+import ollama
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_TEMPERATURE = 0.7
@@ -33,3 +34,25 @@ def call_gemini(prompt: str, api_key: str, config: dict) -> str:
     )
     response = model.generate_content(prompt)
     return response.text
+
+
+def list_ollama_models() -> list[str]:
+    """List available models from the local Ollama instance."""
+    try:
+        response = ollama.list()
+        if hasattr(response, 'models'):
+            return [m.model for m in response.models]
+        else:
+            return [m.get('model', m.get('name')) for m in response.get('models', [])]
+    except Exception as e:
+        print(f"Error fetching Ollama models: {e}")
+        return []
+
+
+def call_ollama(prompt: str, config: dict) -> str:
+    """Send prompt to local Ollama instance."""
+    model_name = config.get("model", "llama3.2")
+    temperature = float(config.get("temperature", DEFAULT_TEMPERATURE))
+    
+    response = ollama.generate(model=model_name, prompt=prompt, options={"temperature": temperature})
+    return response['response']

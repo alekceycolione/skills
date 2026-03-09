@@ -5,7 +5,7 @@ import pyperclip
 import streamlit as st
 from dotenv import load_dotenv
 
-from core.ai_client import call_gemini, list_gemini_models
+from core.ai_client import call_gemini, list_gemini_models, call_ollama, list_ollama_models
 from core.prompt_builder import build_export_text, build_prompt
 from core.skill_reader import list_skills, load_skill, save_skill_md
 from core.file_parser import extract_text_from_file
@@ -68,8 +68,40 @@ with st.sidebar:
     # Per-skill config display
     skill_data = load_skill(SKILLHUB_ROOT, selected_skill)
     cfg = skill_data["config"]
-    if cfg:
-        st.caption(f"**Temperatura:** {cfg.get('temperature', 0.7)}")
+    
+    st.subheader("⚙️ Parâmetros Locais")
+    provider = st.radio("Provedor", ["Ollama", "Gemini"])
+    
+    if provider == "Gemini":
+        api_key_input = st.text_input(
+            "🔑 Gemini API Key",
+            value=GEMINI_API_KEY,
+            type="password",
+            help="Carregada automaticamente do .env. Sobrescreva aqui se necessário.",
+        )
+        if not api_key_input:
+            st.warning("Insira sua API Key para usar Gemini.")
+            
+        @st.cache_data(ttl=300)
+        def cached_gemini_models(key: str) -> list[str]:
+            return list_gemini_models(key)
+        
+        available_models = cached_gemini_models(api_key_input)
+    else:
+        api_key_input = None
+        with st.spinner("Buscando modelos locais..."):
+            available_models = list_ollama_models()
+        if not available_models:
+            st.error("Nenhum modelo Ollama encontrado. Certifique-se que o Ollama está rodando.")
+            available_models = ["llama3.2"] # fallback visual
+            
+    cfg_model = cfg.get("model", available_models[0]) if available_models else "gemini-2.5-flash"
+    default_index = available_models.index(cfg_model) if cfg_model in available_models else 0
+    selected_model_ui = st.selectbox("🤖 Modelo", available_models, index=default_index)
+    cfg["model"] = selected_model_ui
+
+    temperature = st.slider("Temperatura", min_value=0.0, max_value=2.0, value=float(cfg.get('temperature', 0.7)), step=0.1)
+    cfg["temperature"] = temperature
 
 # ── Load skill on selection change ────────────────────────────────────────────
 if "last_skill" not in st.session_state or st.session_state.last_skill != selected_skill:
@@ -128,25 +160,6 @@ with col_query:
         label_visibility="collapsed",
     )
 
-    api_key_input = st.text_input(
-        "🔑 Gemini API Key",
-        value=GEMINI_API_KEY,
-        type="password",
-        help="Carregada automaticamente do .env. Sobrescreva aqui se necessário.",
-    )
-
-    @st.cache_data(ttl=300)
-    def cached_models(key: str) -> list[str]:
-        return list_gemini_models(key)
-    
-    available_models = cached_models(api_key_input)
-    cfg_model = skill_data["config"].get("model", available_models[0])
-    # Fallback caso o modelo do config não esteja na lista
-    default_index = available_models.index(cfg_model) if cfg_model in available_models else 0
-    
-    selected_model_ui = st.selectbox("🤖 Modelo", available_models, index=default_index)
-    skill_data["config"]["model"] = selected_model_ui
-
     send_col, _ = st.columns([1, 3])
     with send_col:
         send_clicked = st.button("🚀 Enviar", type="primary", use_container_width=True)
@@ -174,15 +187,17 @@ with col_query:
             )
             st.session_state.prompt = built_prompt
 
-            with st.spinner("Processando com Gemini..."):
+            with st.spinner(f"Processando com {provider}..."):
                 try:
-                    st.session_state.response = call_gemini(
-                        prompt=built_prompt,
-                        api_key=api_key_input,
-                        config=skill_data["config"],
-                    )
+                    config = {"model": selected_model_ui, "temperature": temperature}
+                    if provider == "Gemini":
+                        response_text = call_gemini(built_prompt, api_key_input, config)
+                    elif provider == "Ollama":
+                        response_text = call_ollama(built_prompt, config)
+                    
+                    st.session_state.response = response_text
                 except Exception as e:
-                    st.session_state.response = f"❌ Erro: {e}"
+                    st.session_state.response = f"❌ Erro ({provider}): {e}"
 
     if st.session_state.prompt:
         with st.expander("🔍 Ver Prompt Completo"):
