@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from core.ai_client import call_gemini, list_gemini_models
 from core.prompt_builder import build_export_text, build_prompt
 from core.skill_reader import list_skills, load_skill, save_skill_md
+from core.file_parser import extract_text_from_file
 
 load_dotenv()
 
@@ -104,6 +105,21 @@ with col_editor:
 # ── Column 2: Query + Response ────────────────────────────────────────────────
 with col_query:
     st.subheader("💬 Query")
+    
+    uploaded_file = st.file_uploader(
+        "📄 Anexar Arquivo (Opcional)", 
+        type=["txt", "pdf", "docx"],
+        help="Envie um artigo ou documento para usar como contexto nesta skill."
+    )
+    
+    extracted_text = ""
+    if uploaded_file is not None:
+        with st.spinner("Extraindo texto..."):
+            extracted_text = extract_text_from_file(uploaded_file)
+            if extracted_text and not extracted_text.startswith("[Erro"):
+                st.success(f"Texto extraído: {len(extracted_text)} caracteres")
+            else:
+                st.error(extracted_text or "Não foi possível extrair o texto.")
 
     query = st.text_area(
         label="Sua pergunta ou tarefa",
@@ -136,13 +152,24 @@ with col_query:
         send_clicked = st.button("🚀 Enviar", type="primary", use_container_width=True)
 
     if send_clicked:
-        if not query.strip():
-            st.warning("Digite uma query antes de enviar.")
+        has_query = bool(query.strip())
+        has_file = bool(extracted_text and not extracted_text.startswith("[Erro"))
+        
+        if not has_query and not has_file:
+            st.warning("Digite uma query ou envie um arquivo antes de enviar.")
         else:
             active_content = edited_content.strip() or st.session_state.skill_content
+            
+            # Combine skill context with extracted text if available
+            combined_context = skill_data["context"] or ""
+            if extracted_text and not extracted_text.startswith("[Erro"):
+                if combined_context:
+                    combined_context += "\n\n---\n\n"
+                combined_context += "### TEXTO ANEXADO PELO USUÁRIO:\n" + extracted_text
+                
             built_prompt = build_prompt(
                 instructions=active_content,
-                context=skill_data["context"],
+                context=combined_context,
                 query=query,
             )
             st.session_state.prompt = built_prompt
