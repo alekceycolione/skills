@@ -11,7 +11,16 @@ from core.skill_reader import list_skills, load_skill, save_skill_md
 
 load_dotenv()
 
-SKILLHUB_ROOT = Path(os.getenv("SKILLHUB_ROOT", str(Path.home() / "Documents/SkillHub")))
+LOCAL_SKILLS_DIR = Path(__file__).parent / "skills"
+DEFAULT_ROOT_DIR = Path.home() / "Documents/SkillHub"
+
+# Usar pasta local 'skills' se existir, caso contrário usar a default do usuário local
+if LOCAL_SKILLS_DIR.exists():
+    DEFAULT_SKILLHUB_ROOT = LOCAL_SKILLS_DIR
+else:
+    DEFAULT_SKILLHUB_ROOT = DEFAULT_ROOT_DIR
+
+SKILLHUB_ROOT = Path(os.getenv("SKILLHUB_ROOT", str(DEFAULT_SKILLHUB_ROOT)))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # ── Page config ──────────────────────────────────────────────────────────────
