@@ -13,19 +13,19 @@ load_dotenv()
 
 # Detect local `skills/` folder dynamically within the repo
 LOCAL_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
-DEFAULT_ROOT_DIR = Path.home() / "Documents/SkillHub"
+DEFAULT_MAC_DIR = Path.home() / "Documents/SkillHub"
 
-# Priority 1: env var (if explicitly set and not empty)
-# Priority 2: local `skills/` folder (cloud fallback)
-# Priority 3: local user home document folder
+# Priority 1: env var (if explicitly set, not empty, and different from Mac default when on Cloud)
 env_var = os.getenv("SKILLHUB_ROOT", "").strip()
 
-if env_var:
+if env_var and Path(env_var).exists() and env_var != str(DEFAULT_MAC_DIR):
     DEFAULT_SKILLHUB_ROOT = Path(env_var)
 elif LOCAL_SKILLS_DIR.exists():
+    # Priority 2: local `skills/` folder (ideal for Streamlit Cloud)
     DEFAULT_SKILLHUB_ROOT = LOCAL_SKILLS_DIR
 else:
-    DEFAULT_SKILLHUB_ROOT = DEFAULT_ROOT_DIR
+    # Priority 3: Fallback to local Mac folder 
+    DEFAULT_SKILLHUB_ROOT = DEFAULT_MAC_DIR
 
 SKILLHUB_ROOT = DEFAULT_SKILLHUB_ROOT
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
